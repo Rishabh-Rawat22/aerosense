@@ -296,6 +296,9 @@ def build_features(df: pd.DataFrame, scaler: Optional[CityScaler] = None,
     """
     city = df["city"].iloc[0] if "city" in df.columns else "unknown"
 
+    # Drop non-numeric columns before reindex (reindex + fillna(0) breaks on strings)
+    df = df.drop(columns=[c for c in ["city", "data_source", "date_ist"] if c in df.columns])
+
     # 1. Hourly reindex
     df = reindex_hourly(df)
 
