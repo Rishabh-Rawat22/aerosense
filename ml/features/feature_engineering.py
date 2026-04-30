@@ -264,9 +264,23 @@ class CityScaler:
             raise FileNotFoundError(f"Scaler not found: {path}")
         with open(path, "rb") as f:
             state = pickle.load(f)
-        sc = cls(city=state["city"])
-        sc.mins_  = state["mins"]
-        sc.maxs_  = state["maxs"]
+
+        # Support both formats:
+        #   1. Production: {"city": str, "mins": dict, "maxs": dict}
+        #   2. Colab:      {"min": np.ndarray(20,), "max": np.ndarray(20,)}
+        if "city" in state:
+            sc = cls(city=state["city"])
+            sc.mins_ = state["mins"]
+            sc.maxs_ = state["maxs"]
+        else:
+            # Colab format — extract city from filename, convert arrays to dicts
+            city_name = os.path.splitext(os.path.basename(path))[0]
+            sc = cls(city=city_name)
+            min_arr = state["min"]
+            max_arr = state["max"]
+            sc.mins_ = {col: float(min_arr[i]) for i, col in enumerate(FEATURE_COLS)}
+            sc.maxs_ = {col: float(max_arr[i]) for i, col in enumerate(FEATURE_COLS)}
+
         sc.fitted = True
         return sc
 
