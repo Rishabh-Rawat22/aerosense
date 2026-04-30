@@ -162,9 +162,26 @@ def load_checkpoint(path: str, device: str = "cpu") -> AQILSTMForecaster:
         raise FileNotFoundError(f"Model checkpoint not found: {path}")
 
     ckpt   = torch.load(path, map_location=device)
-    hp     = ckpt["hparams"]
-    model  = AQILSTMForecaster(**hp)
-    model.load_state_dict(ckpt["state_dict"])
+
+    # Support both checkpoint formats:
+    #   1. New format: { state_dict, hparams, metadata }
+    #   2. Colab format: { model_state_dict, metadata }
+    if "hparams" in ckpt:
+        hp    = ckpt["hparams"]
+        model = AQILSTMForecaster(**hp)
+        model.load_state_dict(ckpt["state_dict"])
+    else:
+        # Colab-trained checkpoint — use defaults and load state dict
+        sd = ckpt.get("model_state_dict") or ckpt.get("state_dict")
+        # Infer n_features from the LSTM weight shape
+        n_features = sd["lstm.weight_ih_l0"].shape[1] if "lstm.weight_ih_l0" in sd else 20
+        # Remap Colab layer names (fc1→head.0, fc2→head.3) to match nn.Sequential
+        key_map = {"fc1.weight": "head.0.weight", "fc1.bias": "head.0.bias",
+                   "fc2.weight": "head.3.weight", "fc2.bias": "head.3.bias"}
+        sd = {key_map.get(k, k): v for k, v in sd.items()}
+        model = AQILSTMForecaster(n_features=n_features)
+        model.load_state_dict(sd)
+
     model.to(device)
     model.eval()
     logger.info(f"Checkpoint loaded ← {path}  |  metadata: {ckpt.get('metadata', {})}")
