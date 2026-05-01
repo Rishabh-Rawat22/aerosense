@@ -114,7 +114,7 @@ def sync_live(days: int = 7, target_city: Optional[str] = None) -> int:
     client = MongoClient(MONGO_URI)
     db     = client.get_default_database()
 
-    src_col = db["hourlySnapshots"]
+    src_col = db["hourlysnapshots"]
     dst_col = db["ml_history"]
 
     dst_col.create_index([("city", 1), ("timestamp", 1)], unique=True, background=True)
