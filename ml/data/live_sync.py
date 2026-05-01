@@ -40,7 +40,7 @@ def snapshot_to_ml_doc(snap: dict) -> Optional[dict]:
     """
     city = snap.get("city", "").strip()
     ts   = snap.get("timestamp")
-    aqi  = snap.get("actual")
+    aqi  = snap.get("actual") or snap.get("predicted")  # fallback to ML prediction
 
     if not city or not ts or aqi is None:
         return None
@@ -119,8 +119,12 @@ def sync_live(days: int = 7, target_city: Optional[str] = None) -> int:
 
     dst_col.create_index([("city", 1), ("timestamp", 1)], unique=True, background=True)
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    query: dict = {"timestamp": {"$gte": cutoff}, "actual": {"$ne": None}}
+    # Node.js stores timestamps shifted by +5:30 (IST offset), so match that
+    ist_offset = timedelta(hours=5, minutes=30)
+    now_shifted = datetime.now(timezone.utc) + ist_offset
+    cutoff = now_shifted - timedelta(days=days)
+    # Include ALL hourly records (actual + predicted) so cities get 168+ hours
+    query: dict = {"timestamp": {"$gte": cutoff}}
 
     if target_city:
         import re
