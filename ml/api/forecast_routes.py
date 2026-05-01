@@ -230,12 +230,24 @@ async def health():
 
 @app.get("/force-refresh")
 async def force_refresh():
-    """Manually trigger the forecast cache background job."""
+    """Manually trigger a deep live sync + forecast cache refresh."""
     import threading
+
+    def _sync_and_predict():
+        try:
+            from data.live_sync import sync_live
+            from scheduler.cron_jobs import job_forecast_cache
+            # First: pull 30 days of hourlySnapshots into ml_history
+            sync_live(days=30)
+            # Then: run inference for all cities
+            job_forecast_cache()
+        except Exception as e:
+            from loguru import logger
+            logger.exception(f"force-refresh failed: {e}")
+
     try:
-        from scheduler.cron_jobs import job_forecast_cache
-        threading.Thread(target=job_forecast_cache, daemon=True).start()
-        return {"status": "ok", "message": "ML forecast cache refresh triggered in background"}
+        threading.Thread(target=_sync_and_predict, daemon=True).start()
+        return {"status": "ok", "message": "30-day sync + ML forecast cache triggered in background"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
